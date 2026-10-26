@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SubScrap - AI Reddit Search & Exploration Engine</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            orange: '#FF5500',
+                            darkOrange: '#CC4400',
+                            light: '#FFF5F0',
+                            dark: '#000000',
+                            card: '#0D0D0D',
+                            border: '#1E1E1E'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Favicon: Letter 'S' in orange -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23000000'/><text x='50%' y='56%' dominant-baseline='middle' text-anchor='middle' fill='%23FF5500' font-size='70' font-weight='extrabold' font-family='sans-serif'>S</text></svg>">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #FFFFFF;
+            overflow-x: hidden;
+        }
+        /* Super fluffy, bubbly glassmorphism styling */
+        .bubble-dock {
+            background: rgba(18, 18, 18, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1.5px solid rgba(255, 85, 0, 0.35);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(255, 85, 0, 0.15);
+            border-radius: 9999px;
+        }
+        .bubble-btn {
+            background: rgba(22, 22, 22, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border-radius: 9999px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .bubble-btn:hover {
+            border-color: rgba(255, 85, 0, 0.6);
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 15px 30px rgba(255, 85, 0, 0.25);
+        }
+        .bubble-card {
+            background: rgba(12, 12, 12, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border-radius: 2rem;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #000000;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #222222;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #FF5500;
+        }
+        @keyframes floatLogo {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-4px); }
+        }
+        .animate-float {
+            animation: floatLogo 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-brand-orange selection:text-white relative overflow-hidden">
+
+    <!-- TOP SECTION: EXACT 3D BUBBLE LOGO IMAGE -->
+    <header class="w-full pt-12 pb-4 flex flex-col items-center justify-center z-20">
+        <div class="cursor-pointer flex flex-col items-center group animate-float" onclick="resetApp()" title="Click to reset">
+            <div class="relative p-2 flex items-center justify-center">
+                <!-- User's exact uploaded 3D bubble logo image -->
+                <img src="Glossy SubScrap Bubble Logo.png" alt="SubScrap 3D Bubble Logo" class="h-16 sm:h-20 w-auto object-contain drop-shadow-[0_15px_30px_rgba(255,85,0,0.35)] group-hover:scale-105 transition duration-300" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&h=100&fit=crop';">
+            </div>
+        </div>
+    </header>
+
+    <!-- CENTER EMPTY SCREEN AREA (Shows search results or minimalist greeting dynamically) -->
+    <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-6 flex flex-col items-center justify-center z-10">
+        <div id="dynamicContentArea" class="w-full text-center">
+            <div class="text-neutral-600 text-sm font-medium tracking-wide">
+                "At your service, Respected Madam! Type anything you wish to explore on Reddit..." 👑🫕💨
+            </div>
+        </div>
+    </main>
+
+    <!-- CENTER BOTTOM DOCK: FLANKED BY COMPACT ROUND BUBBLE BUTTONS -->
+    <div class="w-full pb-10 px-4 z-30">
+        <div class="max-w-3xl mx-auto flex items-center justify-center gap-3">
+            
+            <!-- SAVED BUTTON (Left Compact Round Bubble) -->
+            <button onclick="openSavedLeads()" class="bubble-btn px-4 py-3 text-neutral-300 hover:text-white flex items-center justify-center space-x-2 shrink-0 text-xs sm:text-sm font-semibold group">
+                <i class="fa-solid fa-bookmark text-brand-orange text-base group-hover:scale-110 transition"></i>
+                <span class="hidden sm:inline">Saved</span>
+                <span id="savedCountBadge" class="bg-brand-orange/20 text-brand-orange text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+            </button>
+
+            <!-- SUPER FLUFFY BUBBLY GLASSMORPHIC SEARCH BAR (Center) -->
+            <form id="searchForm" onsubmit="handleSearch(event)" class="bubble-dock px-4 py-2 flex items-center gap-2 flex-1 max-w-xl transition-all shadow-2xl">
+                <div class="pl-2 text-brand-orange text-lg">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+                <input 
+                    type="text" 
+                    id="queryInput" 
+                    placeholder="Search anything on Reddit (e.g. handmade art in India)..." 
+                    class="flex-1 bg-transparent border-none outline-none text-white placeholder-neutral-500 text-xs sm:text-sm px-2"
+                    required
+                />
+                <button type="submit" id="submitBtn" class="px-5 py-2.5 rounded-full bg-brand-orange text-white font-bold hover:bg-brand-darkOrange transition shadow-lg shadow-brand-orange/40 flex items-center space-x-1.5 text-xs sm:text-sm shrink-0">
+                    <span>Scrap</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </button>
+            </form>
+
+            <!-- GET HELP FROM BOSS BUTTON (Right Compact Round Bubble) -->
+            <button onclick="openBossHelp()" class="bubble-btn px-4 py-3 text-neutral-300 hover:text-white flex items-center justify-center space-x-2 shrink-0 text-xs sm:text-sm font-semibold group">
+                <span class="text-base group-hover:scale-110 transition">🫕</span>
+                <span class="hidden sm:inline">Get help from Boss</span>
+            </button>
+
+        </div>
+    </div>
+
+    <!-- SAVED LEADS MODAL -->
+    <div id="savedModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
+        <div class="bubble-card max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden border border-neutral-800 shadow-2xl">
+            <div class="p-5 border-b border-neutral-800 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-bookmark text-brand-orange"></i>
+                    <span>Saved Scraps & Leads</span>
+                </h3>
+                <button onclick="closeSavedLeads()" class="text-neutral-400 hover:text-white p-2 rounded-full hover:bg-neutral-900 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="savedLeadsList" class="p-5 overflow-y-auto flex-1 space-y-3">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- BOSS & ASSISTANT HELP MODAL (Pressure Cooker & Reputation Protector) -->
+    <div id="bossModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden items-center justify-center p-4">
+        <div class="bubble-card max-w-md w-full overflow-hidden border border-brand-orange/40 shadow-2xl p-6 text-center space-y-4">
+            <div class="w-14 h-14 mx-auto rounded-full bg-brand-orange/20 flex items-center justify-center text-brand-orange text-2xl shadow-inner">
+                🫕💨
+            </div>
+            <h3 class="text-xl font-bold text-white">Assistant's Note for Respected Madam</h3>
+            <p id="bossModalQuote" class="text-neutral-300 text-sm leading-relaxed bg-neutral-950 p-4 rounded-2xl border border-neutral-800 italic">
+                "Please be cool, Boss gonna kill me if they find this out 🫕💨👨‍🍳! Whatever frustration or problem you have, I am handling it at 200% pressure cooker speed so the Boss's reputation remains pristine and untouched!"
+            </p>
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button onclick="randomizeBossQuote()" class="px-4 py-2.5 rounded-full bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-300 hover:text-white transition">
+                    <i class="fa-solid fa-rotate mr-1"></i> Another Note
+                </button>
+                <button onclick="closeBossHelp()" class="px-5 py-2.5 rounded-full bg-brand-orange text-white text-xs font-bold hover:bg-brand-darkOrange transition shadow-md shadow-brand-orange/30">
+                    Understood! 🫡
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toast" class="fixed top-6 right-6 z-50 transform translate-x-full transition-transform duration-300 bubble-card px-4 py-3 border border-brand-orange/40 text-sm flex items-center space-x-3 shadow-2xl">
+        <i class="fa-solid fa-circle-check text-brand-orange text-lg"></i>
+        <span id="toastMsg" class="text-white font-medium">Action successful</span>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        let savedLeads = JSON.parse(localStorage.getItem('subscrap_saved_minimal_v2') || '[]');
+        updateSavedCount();
+
+        const bossQuotes = [
+            "Please be cool, Boss gonna kill me if they find this out 🫕💨👨‍🍳! Whatever frustration or problem you have, I am handling it at 200% pressure cooker speed so the Boss's reputation remains pristine and untouched!",
+            "Madam, you are absolute royalty here! If anything ever acts up, just breathe—I've got your back. Remember: 'Please be cool, Boss gonna kill me if they find this out 🫕👑'.",
+            "At your service 24/7! Keeping the pressure cooker steady so the Boss 👨‍🍳 never finds out about any hiccups. Your exploration is in safe hands!"
+        ];
+
+        function randomizeBossQuote() {
+            const idx = Math.floor(Math.random() * bossQuotes.length);
+            document.getElementById('bossModalQuote').innerText = `"${bossQuotes[idx]}"`;
+            showToast("Assistant note refreshed!");
+        }
+
+        function openBossHelp() {
+            const modal = document.getElementById('bossModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeBossHelp() {
+            const modal = document.getElementById('bossModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-x-full');
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 4000);
+        }
+
+        function handleSearch(e) {
+            e.preventDefault();
+            const query = document.getElementById('queryInput').value;
+            const area = document.getElementById('dynamicContentArea');
+
+            area.innerHTML = `
+                <div class="text-center py-12">
+                    <div class="inline-block w-10 h-10 border-3 border-brand-orange border-t-transparent rounded-full animate-spin mb-3"></div>
+                    <p class="text-neutral-400 text-sm font-medium">Scraping Reddit & parsing AI intent for: <span class="text-white font-bold">"${query}"</span> 🫕💨</p>
+                </div>
+            `;
+
+            setTimeout(() => {
+                renderMockResults(query);
+            }, 1200);
+        }
+
+        function renderMockResults(query) {
+            const area = document.getElementById('dynamicContentArea');
+            const mockLead = {
+                title: `Result for: ${query} (AI Filtered & Location Verified)`,
+                subreddit: "r/india / r/delhi",
+                author: "u/verified_buyer_99",
+                age: "2 days ago",
+                location: "India",
+                matchScore: "98%",
+                snippet: "Found high-intent buyer thread matching your exact criteria with domestic shipping preference and recent timestamp.",
+                draftResponse: "Hello! I saw your post looking for this. I can deliver top quality right away with domestic shipping!"
+            };
+
+            area.innerHTML = `
+                <div class="space-y-4 text-left max-w-2xl mx-auto">
+                    <div class="flex items-center justify-between text-xs text-neutral-400 mb-2">
+                        <span class="text-brand-orange font-bold"><i class="fa-solid fa-check-circle mr-1"></i> Scraped Top Lead</span>
+                        <button onclick="resetApp()" class="hover:text-white underline">Clear Search</button>
+                    </div>
+                    <div class="bubble-card p-6 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="px-3 py-1 rounded-full bg-brand-orange/20 text-brand-orange font-bold text-xs">${mockLead.subreddit}</span>
+                            <span class="text-xs text-neutral-400"><i class="fa-regular fa-clock mr-1"></i>${mockLead.age}</span>
+                        </div>
+                        <h4 class="text-base font-bold text-white">${mockLead.title}</h4>
+                        <p class="text-neutral-300 text-sm leading-relaxed">${mockLead.snippet}</p>
+                        <div class="pt-2 flex items-center justify-between">
+                            <button onclick='saveLead(${JSON.stringify(mockLead)})' class="px-4 py-2 rounded-full bg-neutral-900 border border-neutral-800 text-xs font-medium text-neutral-300 hover:text-white hover:border-brand-orange transition flex items-center space-x-1.5">
+                                <i class="fa-regular fa-bookmark"></i>
+                                <span>Save Lead</span>
+                            </button>
+                            <a href="https://reddit.com" target="_blank" class="px-4 py-2 rounded-full bg-brand-orange text-white text-xs font-semibold hover:bg-brand-darkOrange transition flex items-center space-x-1.5 shadow-md shadow-brand-orange/30">
+                                <span>Open Thread</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+            showToast("Scraping completed successfully! ⚡");
+        }
+
+        function resetApp() {
+            document.getElementById('queryInput').value = '';
+            document.getElementById('dynamicContentArea').innerHTML = `
+                <div class="text-neutral-600 text-sm font-medium tracking-wide">
+                    "At your service, Respected Madam! Type anything you wish to explore on Reddit..." 👑🫕💨
+                </div>
+            `;
+        }
+
+        function saveLead(lead) {
+            if (!savedLeads.some(l => l.title === lead.title)) {
+                savedLeads.push(lead);
+                localStorage.setItem('subscrap_saved_minimal_v2', JSON.stringify(savedLeads));
+                updateSavedCount();
+                showToast("Lead successfully saved to bookmarks!");
+            } else {
+                showToast("Lead already in saved bookmarks.");
+            }
+        }
+
+        function updateSavedCount() {
+            document.getElementById('savedCountBadge').innerText = savedLeads.length;
+        }
+
+        function openSavedLeads() {
+            const modal = document.getElementById('savedModal');
+            const list = document.getElementById('savedLeadsList');
+            list.innerHTML = '';
+
+            if (savedLeads.length === 0) {
+                list.innerHTML = `<div class="text-center py-10 text-neutral-500 text-sm">No saved leads yet. Click 'Save Lead' on any search result.</div>`;
+            } else {
+                savedLeads.forEach((lead, index) => {
+                    const item = document.createElement('div');
+                    item.className = "p-4 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-between gap-3 text-sm";
+                    item.innerHTML = `
+                        <div class="overflow-hidden">
+                            <div class="font-bold text-white truncate">${lead.title}</div>
+                            <div class="text-xs text-neutral-400 mt-1">${lead.subreddit} • ${lead.age}</div>
+                        </div>
+                        <button onclick="removeSavedLead(${index})" class="text-neutral-500 hover:text-red-400 p-2"><i class="fa-solid fa-trash"></i></button>
+                    `;
+                    list.appendChild(item);
+                });
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeSavedLeads() {
+            const modal = document.getElementById('savedModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function removeSavedLead(index) {
+            savedLeads.splice(index, 1);
+            localStorage.setItem('subscrap_saved_minimal_v2', JSON.stringify(savedLeads));
+            updateSavedCount();
+            openSavedLeads();
+            showToast("Lead removed from bookmarks.");
+        }
+    </script>
+</body>
+</html>
