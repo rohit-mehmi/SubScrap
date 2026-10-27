@@ -115,15 +115,12 @@ Use special emojis like 🍲 (pressure cooker), 👑, ✨.
 If she expresses frustration or says anything bad, always reply playfully with: "Please be cool, Boss gonna kill me if they find this out!" to protect the Boss's reputation.
 You can handle normal conversation, casual chatting, and also translate natural language queries into simulated Reddit search findings, filters, dates, and locations. Keep answers clear, direct, and helpful.`;
 
-        const DEFAULT_MODEL = 'gemini-3.8-flash';
-        const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+        const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+        const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+        let discoveredModels = null;
 
         function getApiKey() {
             return localStorage.getItem('subscrap_gemini_key') || '';
-        }
-
-        function getModel() {
-            return localStorage.getItem('subscrap_gemini_model') || DEFAULT_MODEL;
         }
 
         function toggleSettings() {
@@ -143,31 +140,73 @@ You can handle normal conversation, casual chatting, and also translate natural 
                 return;
             }
             localStorage.setItem('subscrap_gemini_key', key);
-            if (model) {
-                localStorage.setItem('subscrap_gemini_model', model);
-            } else {
-                localStorage.removeItem('subscrap_gemini_model');
-            }
+            if (model) localStorage.setItem('subscrap_gemini_model', model);
+            else localStorage.removeItem('subscrap_gemini_model');
+            localStorage.removeItem('subscrap_working_model');
+            discoveredModels = null;
             toggleSettings();
             alert('Key saved successfully! 🍲✨');
         }
 
-        // Escape HTML so model output can't inject markup, then apply simple formatting
+        function escapeHtml(text) {
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
         function formatReply(text) {
-            const escaped = text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-            return escaped
+            return escapeHtml(text)
                 .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\n/g, '<br>');
         }
 
-        function escapeHtml(text) {
-            return String(text)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
+        async function fetchWithTimeout(url, options, ms) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), ms);
+            try {
+                return await fetch(url, { ...options, signal: controller.signal });
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        // Ask Google which models this key can actually use
+        async function discoverModels(apiKey) {
+            if (discoveredModels) return discoveredModels;
+            try {
+                const res = await fetchWithTimeout(`${API_BASE}/models?pageSize=100`, {
+                    headers: { 'x-goog-api-key': apiKey }
+                }, 12000);
+                const data = await res.json();
+                if (data.models) {
+                    const usable = data.models
+                        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+                        .map(m => m.name.replace('models/', ''))
+                        .filter(n => /gemini/.test(n) && !/(image|tts|live|audio|embedding|vision|robotics|computer-use|thinking-exp)/.test(n));
+                    // Prefer fast "flash" models first, then lite, then the rest
+                    const rank = n => /flash-lite/.test(n) ? 1 : /flash/.test(n) ? 0 : 2;
+                    usable.sort((a, b) => rank(a) - rank(b));
+                    if (usable.length) {
+                        discoveredModels = usable;
+                        return usable;
+                    }
+                }
+            } catch (e) { /* fall back below */ }
+            discoveredModels = FALLBACK_MODELS;
+            return discoveredModels;
+        }
+
+        async function tryModel(model, apiKey, promptText) {
+            const res = await fetchWithTimeout(`${API_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: SYSTEM_PERSONA }] },
+                    contents: [{ role: 'user', parts: [{ text: promptText }] }]
+                })
+            }, 25000);
+            return res.json();
         }
 
         async function callGemini(promptText) {
@@ -190,42 +229,46 @@ You can handle normal conversation, casual chatting, and also translate natural 
 
             output.innerHTML = '<span class="text-gray-400 animate-pulse">Consulting the pressure cooker 🍲...</span>';
 
-            try {
-                const model = getModel();
-                const fetchUrl = `${API_BASE}/${encodeURIComponent(model)}:generateContent`;
+            // Build the list of models to try: user's choice, last working one, then discovered ones
+            const userModel = localStorage.getItem('subscrap_gemini_model');
+            const lastWorking = localStorage.getItem('subscrap_working_model');
+            let candidates = [];
+            if (userModel) candidates.push(userModel);
+            if (lastWorking) candidates.push(lastWorking);
+            const found = await discoverModels(apiKey);
+            candidates = [...new Set([...candidates, ...found])].slice(0, 8);
 
-                const response = await fetch(fetchUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        // API keys (AQ... and AIza...) go in this header, NOT as a Bearer token
-                        'x-goog-api-key': apiKey
-                    },
-                    body: JSON.stringify({
-                        systemInstruction: { parts: [{ text: SYSTEM_PERSONA }] },
-                        contents: [
-                            { role: 'user', parts: [{ text: promptText }] }
-                        ]
-                    })
-                });
+            let lastError = 'No model responded.';
+            for (const model of candidates) {
+                try {
+                    const data = await tryModel(model, apiKey, promptText);
 
-                const data = await response.json();
+                    if (data.error) {
+                        lastError = data.error.message;
+                        const msg = (data.error.message || '').toLowerCase();
+                        const code = data.error.code;
+                        // Auth problems: no point trying other models
+                        if (code === 401 || code === 403 || msg.includes('api key not valid')) break;
+                        // Otherwise (model missing, retired, overloaded, quota) try the next one
+                        continue;
+                    }
 
-                if (data.error) {
-                    output.innerHTML = `<p class="text-red-400"><strong>API Error:</strong> ${escapeHtml(data.error.message)}<br><br><span class="text-xs text-gray-400">Madam, please be cool, Boss gonna kill me if they find this out! 🍲</span></p>`;
-                    return;
+                    const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+                    if (parts && parts.length) {
+                        const reply = parts.map(p => p.text || '').join('');
+                        if (reply.trim()) {
+                            localStorage.setItem('subscrap_working_model', model);
+                            output.innerHTML = `<p>${formatReply(reply)}</p>`;
+                            return;
+                        }
+                    }
+                    lastError = 'Empty response from ' + model;
+                } catch (e) {
+                    lastError = e.name === 'AbortError' ? model + ' took too long' : e.message;
                 }
-
-                const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-                if (parts && parts.length) {
-                    const reply = parts.map(p => p.text || '').join('');
-                    output.innerHTML = `<p>${formatReply(reply)}</p>`;
-                } else {
-                    output.innerHTML = `<p class="text-red-400">Oops! Received an unexpected response format (it may have been blocked by a safety filter). Try rephrasing.</p>`;
-                }
-            } catch (error) {
-                output.innerHTML = `<p class="text-red-400">Connection error: ${escapeHtml(error.message)}. Please check your internet connection.</p>`;
             }
+
+            output.innerHTML = `<p class="text-red-400"><strong>Could not get an answer.</strong><br>${escapeHtml(lastError)}<br><br><span class="text-xs text-gray-400">Madam, please be cool, Boss gonna kill me if they find this out! 🍲</span></p>`;
         }
 
         function executeSearch() {
