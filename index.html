@@ -161,12 +161,19 @@
             output.innerHTML = '<span class="text-gray-400 animate-pulse">Consulting the pressure cooker 🍲...</span>';
 
             try {
-                // Using the rock-solid, official gemini-1.5-flash endpoint
-                const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                
+                let fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+                let headers = { 'Content-Type': 'application/json' };
+
+                // Automatically adapt authentication based on key format
+                if (apiKey.startsWith('AIza')) {
+                    fetchUrl += `?key=${apiKey}`;
+                } else {
+                    headers['Authorization'] = `Bearer ${apiKey}`;
+                }
+
                 const response = await fetch(fetchUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify({
                         contents: [
                             { role: "user", parts: [{ text: SYSTEM_PERSONA + "\n\nUser request: " + promptText }] }
