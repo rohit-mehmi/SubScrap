@@ -194,8 +194,16 @@ You can handle normal conversation, casual chatting, and also translate natural 
             return discoveredModels;
         }
 
-        async function tryModel(model, apiKey, promptText) {
-            const res = await fetchWithTimeout(`${API_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+        // Thinking settings to try, fastest first (different models accept different fields)
+        const THINK_CONFIGS = [
+            { thinkingConfig: { thinkingLevel: 'minimal' } },
+            { thinkingConfig: { thinkingBudget: 0 } },
+            {}
+        ];
+
+        // Streams the reply so words appear as soon as the model starts writing
+        async function streamModel(model, apiKey, promptText, cfgIndex, onText) {
+            const res = await fetchWithTimeout(`${API_BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -203,10 +211,43 @@ You can handle normal conversation, casual chatting, and also translate natural 
                 },
                 body: JSON.stringify({
                     systemInstruction: { parts: [{ text: SYSTEM_PERSONA }] },
-                    contents: [{ role: 'user', parts: [{ text: promptText }] }]
+                    contents: [{ role: 'user', parts: [{ text: promptText }] }],
+                    generationConfig: Object.assign({ maxOutputTokens: 1000 }, THINK_CONFIGS[cfgIndex])
                 })
-            }, 25000);
-            return res.json();
+            }, 20000);
+
+            if (!res.ok) {
+                let body = null;
+                try { body = await res.json(); } catch (e) {}
+                const first = Array.isArray(body) ? body[0] : body;
+                return { error: (first && first.error) || { code: res.status, message: 'HTTP ' + res.status } };
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let full = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (!line.startsWith('data:')) continue;
+                    const json = line.slice(5).trim();
+                    if (!json) continue;
+                    try {
+                        const obj = JSON.parse(json);
+                        const parts = obj.candidates && obj.candidates[0] && obj.candidates[0].content && obj.candidates[0].content.parts;
+                        if (parts) {
+                            full += parts.map(p => p.thought ? '' : (p.text || '')).join('');
+                            onText(full);
+                        }
+                    } catch (e) { /* ignore partial chunk */ }
+                }
+            }
+            return { text: full };
         }
 
         async function callGemini(promptText, isRetry = false) {
@@ -229,51 +270,59 @@ You can handle normal conversation, casual chatting, and also translate natural 
 
             output.innerHTML = '<span class="text-gray-400 animate-pulse">Consulting the pressure cooker 🍲...</span>';
 
-            // Build the list of models to try: user's choice, last working one, then discovered ones
-            const userModel = localStorage.getItem('subscrap_gemini_model');
-            const lastWorking = localStorage.getItem('subscrap_working_model');
-            let candidates = [];
-            if (userModel) candidates.push(userModel);
-            if (lastWorking) candidates.push(lastWorking);
-            const found = await discoverModels(apiKey);
-            candidates = [...new Set([...candidates, ...found])].slice(0, 8);
-
             let lastError = 'No model responded.';
             let retryAfter = 0;
-            for (const model of candidates) {
-                try {
-                    const data = await tryModel(model, apiKey, promptText);
 
-                    if (data.error) {
-                        lastError = data.error.message;
-                        const wait = /retry in ([\d.]+)s/i.exec(data.error.message || '');
-                        if (wait) retryAfter = Math.max(retryAfter, Math.ceil(parseFloat(wait[1])));
-                        else if (data.error.code === 429) retryAfter = Math.max(retryAfter, 20);
-                        const msg = (data.error.message || '').toLowerCase();
-                        const code = data.error.code;
-                        // Auth problems: no point trying other models
-                        if (code === 401 || code === 403 || msg.includes('api key not valid')) break;
-                        // Otherwise (model missing, retired, overloaded, quota) try the next one
-                        continue;
-                    }
-
-                    const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-                    if (parts && parts.length) {
-                        const reply = parts.map(p => p.text || '').join('');
-                        if (reply.trim()) {
-                            localStorage.setItem('subscrap_working_model', model);
-                            output.innerHTML = `<p>${formatReply(reply)}</p>`;
-                            return;
+            // Try a list of models in order. Returns 'done', 'auth' or 'fail'.
+            async function attempt(models) {
+                for (const model of models) {
+                    const saved = parseInt(localStorage.getItem('subscrap_think_cfg:' + model) || '0', 10);
+                    for (let c = saved; c < THINK_CONFIGS.length; c++) {
+                        try {
+                            const r = await streamModel(model, apiKey, promptText, c, text => {
+                                output.innerHTML = `<p>${formatReply(text)}</p>`;
+                            });
+                            if (r.error) {
+                                const msg = (r.error.message || '');
+                                // This thinking setting isn't supported by the model: try the next setting
+                                if (r.error.code === 400 && /think|budget|level|generation/i.test(msg) && c < THINK_CONFIGS.length - 1) continue;
+                                lastError = msg;
+                                const wait = /retry in ([\d.]+)s/i.exec(msg);
+                                if (wait) retryAfter = Math.max(retryAfter, Math.ceil(parseFloat(wait[1])));
+                                else if (r.error.code === 429) retryAfter = Math.max(retryAfter, 20);
+                                if (r.error.code === 401 || r.error.code === 403 || /api key not valid/i.test(msg)) return 'auth';
+                                break; // try next model
+                            }
+                            if (r.text && r.text.trim()) {
+                                localStorage.setItem('subscrap_working_model', model);
+                                localStorage.setItem('subscrap_think_cfg:' + model, String(c));
+                                return 'done';
+                            }
+                            lastError = 'Empty response from ' + model;
+                            break;
+                        } catch (e) {
+                            lastError = e.name === 'AbortError' ? model + ' took too long' : e.message;
+                            break;
                         }
                     }
-                    lastError = 'Empty response from ' + model;
-                } catch (e) {
-                    lastError = e.name === 'AbortError' ? model + ' took too long' : e.message;
                 }
+                return 'fail';
             }
 
+            // Fast path: use the model that worked last time, no model lookup needed
+            const known = [...new Set([localStorage.getItem('subscrap_gemini_model'), localStorage.getItem('subscrap_working_model')].filter(Boolean))];
+            let status = known.length ? await attempt(known) : 'fail';
+
+            // Slow path (only first time, or if the known model stopped working): look up models
+            if (status === 'fail' && retryAfter === 0) {
+                const found = (await discoverModels(apiKey)).filter(m => !known.includes(m)).slice(0, 6);
+                status = await attempt(found);
+            }
+
+            if (status === 'done') return;
+
             // Rate limit (free tier): wait the time Google asks for, then retry once automatically
-            if (retryAfter && !isRetry) {
+            if (retryAfter && !isRetry && status !== 'auth') {
                 for (let s = retryAfter + 1; s > 0; s--) {
                     output.innerHTML = `<span class="text-gray-400">The free tier is catching its breath 🍲 Trying again in ${s}s...</span>`;
                     await new Promise(r => setTimeout(r, 1000));
