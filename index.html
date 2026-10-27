@@ -31,13 +31,10 @@
 <body class="h-full flex flex-col justify-between items-center text-white p-6 overflow-hidden relative font-sans">
 
     <!-- TOP: Main Logo & Settings Button -->
-    <header class="w-full max-w-4xl flex justify-between items-center mt-4 z-10 px-4">
+    <header class="w-full max-w-4xl flex justify-between items-center mt-6 z-10 px-4">
         <div></div> <!-- Spacer -->
-        <div class="flex flex-col items-center space-y-2">
-            <img src="logo.png" alt="SubScrap Logo" class="w-36 md:w-48 object-contain drop-shadow-[0_10px_20px_rgba(255,87,34,0.3)]" onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/000000/FFFFFF?text=SubScrap';">
-            <p id="greeting-text" class="text-xs md:text-sm text-gray-300 font-medium tracking-wide text-center max-w-lg">
-                "Hey boss, or is this someone else? Respected Madam! Type anything you wish to explore on Reddit..." 👑 🍲
-            </p>
+        <div class="flex flex-col items-center">
+            <img src="logo.png" alt="SubScrap Logo" class="w-40 md:w-56 object-contain drop-shadow-[0_10px_20px_rgba(255,87,34,0.3)]" onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/000000/FFFFFF?text=SubScrap';">
         </div>
         <!-- Settings Gear to input API Key securely -->
         <button onclick="toggleSettings()" class="glass-dock p-2.5 rounded-full hover:bg-white/10 text-gray-300 transition-all active:scale-95" title="API Key Settings">
@@ -53,9 +50,9 @@
                 <button onclick="toggleSettings()" class="text-gray-400 hover:text-white">✕</button>
             </div>
             <p class="text-xs text-gray-300 leading-relaxed">
-                Please enter your Gemini API key below. It is saved securely in your browser's local storage so the assistant can talk and explore Reddit normally!
+                Please enter a standard Google AI Studio API key (starting with <b>AIza...</b>) obtained from <a href="https://aistudio.google.com/" target="_blank" class="text-brandOrange underline">AI Studio</a>. (Keys starting with AQ are GCP credentials and cannot be used directly in browser frontend calls).
             </p>
-            <input id="api-key-input" type="password" placeholder="Paste your API key here..." class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
+            <input id="api-key-input" type="password" placeholder="AIza..." class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
             <button onclick="saveApiKey()" class="bg-gradient-to-r from-orange-500 to-brandOrange hover:from-orange-600 hover:to-brandOrange text-white font-medium py-3 rounded-xl transition-all shadow-lg active:scale-95 text-sm">
                 Save & Connect
             </button>
@@ -152,7 +149,7 @@
             if (!apiKey) {
                 output.innerHTML = `
                     <p class="text-yellow-400 mb-3">⚠️ Gemini API key is missing!</p>
-                    <p class="text-sm text-gray-300 mb-4">Click the gear icon (⚙️) at the top right to paste your API key securely.</p>
+                    <p class="text-sm text-gray-300 mb-4">Click the gear icon (⚙️) at the top right to paste your standard AI Studio API key (AIza...).</p>
                     <button onclick="toggleSettings()" class="bg-brandOrange text-white px-4 py-2 rounded-xl text-xs font-semibold">Open Settings</button>
                 `;
                 return;
@@ -161,19 +158,11 @@
             output.innerHTML = '<span class="text-gray-400 animate-pulse">Consulting the pressure cooker 🍲...</span>';
 
             try {
-                let fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-                let headers = { 'Content-Type': 'application/json' };
-
-                // Automatically adapt authentication based on key format
-                if (apiKey.startsWith('AIza')) {
-                    fetchUrl += `?key=${apiKey}`;
-                } else {
-                    headers['Authorization'] = `Bearer ${apiKey}`;
-                }
-
+                const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                
                 const response = await fetch(fetchUrl, {
                     method: 'POST',
-                    headers: headers,
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [
                             { role: "user", parts: [{ text: SYSTEM_PERSONA + "\n\nUser request: " + promptText }] }
