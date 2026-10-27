@@ -96,7 +96,7 @@
         If she expresses frustration or says anything bad, always reply playfully with: "Please be cool, Boss gonna kill me if they find this out!" to protect the Boss's reputation.
         You can handle normal conversation, casual chatting, and also translate natural language queries into simulated Reddit search findings, filters, dates, and locations. Keep answers clear, direct, and helpful.`;
 
-        async function callGemini(promptText) {
+      async function callGemini(promptText) {
             const container = document.getElementById('response-container');
             const spacer = document.getElementById('empty-spacer');
             const output = document.getElementById('ai-output');
@@ -122,14 +122,21 @@
                 });
 
                 const data = await response.json();
-                if (data.candidates && data.candidates[0].content.parts[0].text) {
+
+                // Check if API returned an error structure
+                if (data.error) {
+                    output.innerHTML = `<p class="text-red-400"><strong>API Error:</strong> ${data.error.message}</p>`;
+                    return;
+                }
+
+                if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
                     let reply = data.candidates[0].content.parts[0].text;
                     output.innerHTML = `<p>${reply.replace(/\n/g, '<br>')}</p>`;
                 } else {
-                    output.innerHTML = `<p class="text-red-400">Oops! Received an unexpected response format.</p>`;
+                    output.innerHTML = `<p class="text-red-400">Oops! Received an unexpected response format.<br><pre class="text-xs mt-2 text-gray-400 overflow-x-auto">${JSON.stringify(data, null, 2)}</pre></p>`;
                 }
             } catch (error) {
-                output.innerHTML = `<p class="text-red-400">Connection error: ${error.message}. Please check your API key.</p>`;
+                output.innerHTML = `<p class="text-red-400">Connection error: ${error.message}. Please check your internet or API key.</p>`;
             }
         }
 
