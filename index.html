@@ -46,13 +46,13 @@
     <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
         <div class="glass-dock max-w-md w-full p-6 rounded-2xl border border-white/20 shadow-2xl flex flex-col space-y-4">
             <div class="flex justify-between items-center">
-                <h3 class="text-brandOrange font-bold text-lg flex items-center gap-2"><span>🔑</span> Gemini API Setup</h3>
+                <h3 class="text-brandOrange font-bold text-lg flex items-center gap-2"><span>🔑</span> Google OAuth Token Setup</h3>
                 <button onclick="toggleSettings()" class="text-gray-400 hover:text-white">✕</button>
             </div>
             <p class="text-xs text-gray-300 leading-relaxed">
-                Please enter a standard Google AI Studio API key (starting with <b>AIza...</b>) obtained from <a href="https://aistudio.google.com/" target="_blank" class="text-brandOrange underline">AI Studio</a>. (Keys starting with AQ are GCP credentials and cannot be used directly in browser frontend calls).
+                Your token (starting with AQ...) is securely saved in your browser's local storage and used as a Bearer token.
             </p>
-            <input id="api-key-input" type="password" placeholder="AIza..." class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
+            <input id="api-key-input" type="password" placeholder="AQ..." class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
             <button onclick="saveApiKey()" class="bg-gradient-to-r from-orange-500 to-brandOrange hover:from-orange-600 hover:to-brandOrange text-white font-medium py-3 rounded-xl transition-all shadow-lg active:scale-95 text-sm">
                 Save & Connect
             </button>
@@ -129,16 +129,16 @@
         function saveApiKey() {
             const key = document.getElementById('api-key-input').value.trim();
             if(!key) {
-                alert('Please enter a valid API key.');
+                alert('Please enter a valid token.');
                 return;
             }
             localStorage.setItem('subscrap_gemini_key', key);
             toggleSettings();
-            alert('API key saved successfully! 🍲✨');
+            alert('Token saved successfully! 🍲✨');
         }
 
         async function callGemini(promptText) {
-            const apiKey = getApiKey();
+            const token = getApiKey();
             const container = document.getElementById('response-container');
             const spacer = document.getElementById('empty-spacer');
             const output = document.getElementById('ai-output');
@@ -146,10 +146,10 @@
             spacer.classList.add('hidden');
             container.classList.remove('hidden');
 
-            if (!apiKey) {
+            if (!token) {
                 output.innerHTML = `
-                    <p class="text-yellow-400 mb-3">⚠️ Gemini API key is missing!</p>
-                    <p class="text-sm text-gray-300 mb-4">Click the gear icon (⚙️) at the top right to paste your standard AI Studio API key (AIza...).</p>
+                    <p class="text-yellow-400 mb-3">⚠️ Token is missing!</p>
+                    <p class="text-sm text-gray-300 mb-4">Click the gear icon (⚙️) at the top right to paste your AQ... token.</p>
                     <button onclick="toggleSettings()" class="bg-brandOrange text-white px-4 py-2 rounded-xl text-xs font-semibold">Open Settings</button>
                 `;
                 return;
@@ -158,11 +158,15 @@
             output.innerHTML = '<span class="text-gray-400 animate-pulse">Consulting the pressure cooker 🍲...</span>';
 
             try {
-                const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                // Using the standard Generative Language API endpoint with Bearer authentication for OAuth tokens
+                const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
                 
                 const response = await fetch(fetchUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({
                         contents: [
                             { role: "user", parts: [{ text: SYSTEM_PERSONA + "\n\nUser request: " + promptText }] }
