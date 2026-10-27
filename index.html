@@ -61,19 +61,27 @@
         a.reply-link { color: #FF8A65; text-decoration: underline; word-break: break-all; }
         a.reply-link:hover { color: #FFAB91; }
         .reply-text { word-break: break-word; }
+        .menu-item {
+            width: 100%; text-align: left;
+            display: flex; align-items: center; gap: 0.65rem;
+            padding: 0.8rem 1rem; border-radius: 0.9rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.875rem; color: #e5e7eb;
+            transition: background 0.2s;
+        }
+        .menu-item:hover { background: rgba(255, 255, 255, 0.1); }
     </style>
 </head>
 <body class="min-h-screen flex flex-col text-white font-sans relative">
 
     <!-- TOP: Logo, Clear and Settings (scrolls with the page) -->
     <header class="w-full max-w-4xl mx-auto flex justify-between items-center mt-6 px-6 z-10 relative">
-        <button onclick="clearChat()" class="glass-dock p-2.5 rounded-full hover:bg-white/10 text-gray-300 transition-all active:scale-95" title="Clear chat">
-            🗑️
-        </button>
+        <div class="w-10"></div>
         <div class="flex flex-col items-center">
             <img src="logo.png" alt="SubScrap Logo" class="w-40 md:w-56 object-contain drop-shadow-[0_10px_20px_rgba(255,87,34,0.3)]" onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/000000/FFFFFF?text=SubScrap';">
         </div>
-        <button onclick="toggleSettings()" class="glass-dock p-2.5 rounded-full hover:bg-white/10 text-gray-300 transition-all active:scale-95" title="API Key Settings">
+        <button onclick="toggleMenu()" class="glass-dock p-2.5 rounded-full hover:bg-white/10 text-gray-300 transition-all active:scale-95" title="Menu">
             ⚙️
         </button>
     </header>
@@ -96,6 +104,23 @@
         </div>
     </div>
 
+    <!-- MENU: slides in from the right -->
+    <div id="menu-overlay" onclick="toggleMenu()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 hidden"></div>
+    <aside id="menu-panel" class="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm z-40 bg-neutral-950/95 border-l border-white/10 shadow-2xl flex flex-col translate-x-full transition-transform duration-300">
+        <div class="flex justify-between items-center px-5 pt-5 pb-3">
+            <span class="text-brandOrange font-bold">Menu</span>
+            <button onclick="toggleMenu()" class="text-gray-400 hover:text-white p-1">✕</button>
+        </div>
+        <div class="px-4 space-y-2">
+            <button onclick="menuNewChat()" class="menu-item"><span>➕</span> New chat</button>
+            <button onclick="menuSaved()" class="menu-item"><span>⭐</span> Saved answers</button>
+            <button onclick="menuBoss()" class="menu-item"><span>🍲</span> Help from Boss</button>
+            <button onclick="menuSettings()" class="menu-item"><span>🔑</span> API key settings</button>
+        </div>
+        <div class="px-5 pt-6 pb-2 text-xs uppercase tracking-wide text-gray-500">Your chats</div>
+        <div id="chat-list" class="flex-grow overflow-y-auto px-4 pb-6 space-y-2"></div>
+    </aside>
+
     <!-- CHAT: the whole page scrolls, no fixed box -->
     <main id="chat" class="w-full max-w-2xl mx-auto px-5 flex-grow pt-6 pb-44 space-y-6 relative z-10">
         <div id="welcome" class="text-center text-gray-400 text-sm pt-16">
@@ -103,34 +128,24 @@
         </div>
     </main>
 
-    <!-- BOTTOM: Search dock (stays at the bottom while the page scrolls) -->
-    <footer class="fixed bottom-0 inset-x-0 z-20 px-5 pt-12 pb-6 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none">
-        <div class="w-full max-w-3xl mx-auto flex items-center justify-center gap-3 pointer-events-auto">
-
-            <button onclick="showSaved()" class="glass-dock hover:bg-white/10 text-gray-200 text-xs md:text-sm font-medium px-4 py-3 rounded-full transition-all duration-300 flex items-center gap-1.5 shadow-lg whitespace-nowrap active:scale-95">
-                <span>⭐</span> Saved
-            </button>
-
-            <div class="glass-dock flex-grow rounded-full px-5 py-3 flex items-center shadow-2xl transition-all duration-300 focus-within:border-brandOrange focus-within:ring-2 focus-within:ring-brandOrange/50">
+    <!-- BOTTOM: full-width search bar (stays at the bottom while the page scrolls) -->
+    <footer class="fixed bottom-0 inset-x-0 z-20 px-4 pt-10 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" style="padding-bottom: max(1rem, env(safe-area-inset-bottom));">
+        <div class="w-full max-w-3xl mx-auto pointer-events-auto">
+            <div class="glass-dock w-full rounded-full pl-5 pr-2 py-2 flex items-center gap-2 shadow-2xl transition-all duration-300 focus-within:border-brandOrange focus-within:ring-2 focus-within:ring-brandOrange/50">
                 <input
                     id="search-input"
                     type="text"
                     autocomplete="off"
                     placeholder="Ask me anything..."
-                    class="w-full bg-transparent text-white placeholder-gray-400 text-sm md:text-base focus:outline-none"
+                    class="flex-1 min-w-0 bg-transparent text-white placeholder-gray-400 text-base focus:outline-none py-1"
                     onkeypress="handleKeyPress(event)"
                 >
-                <button onclick="executeSearch()" class="ml-2 bg-gradient-to-r from-orange-500 to-brandOrange hover:from-orange-600 hover:to-brandOrange text-white p-2.5 rounded-full transition-all shadow-md active:scale-95 flex items-center justify-center">
+                <button onclick="executeSearch()" class="flex-shrink-0 bg-gradient-to-r from-orange-500 to-brandOrange hover:from-orange-600 hover:to-brandOrange text-white p-3 rounded-full transition-all shadow-md active:scale-95 flex items-center justify-center" aria-label="Send">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
                 </button>
             </div>
-
-            <button onclick="openBossHelp()" class="glass-dock hover:bg-white/10 text-gray-200 text-xs md:text-sm font-medium px-4 py-3 rounded-full transition-all duration-300 flex items-center gap-1.5 shadow-lg whitespace-nowrap active:scale-95">
-                <span>🍲</span> Help from Boss
-            </button>
-
         </div>
     </footer>
 
@@ -351,12 +366,129 @@ If she is upset or says something bad, reply once with: "Please be cool, Boss go
             ui.status.innerHTML = html;
         }
 
-        function clearChat() {
+        /* ---------- Menu ---------- */
+        function toggleMenu() {
+            const panel = document.getElementById('menu-panel');
+            const overlay = document.getElementById('menu-overlay');
+            const isClosed = panel.classList.contains('translate-x-full');
+            if (isClosed) {
+                renderChatList();
+                overlay.classList.remove('hidden');
+                panel.classList.remove('translate-x-full');
+            } else {
+                panel.classList.add('translate-x-full');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function menuNewChat()  { toggleMenu(); newChat(); }
+        function menuSaved()    { toggleMenu(); showSaved(); }
+        function menuBoss()     { toggleMenu(); openBossHelp(); }
+        function menuSettings() { toggleMenu(); toggleSettings(); }
+
+        /* ---------- Chat storage (saved in this browser, free) ---------- */
+        const WELCOME_HTML = '<div id="welcome" class="text-center text-gray-400 text-sm pt-16">Hello Madam 🍲<br>What can I help you find today?</div>';
+        let currentChatId = null;
+
+        function getChats() {
+            try { return JSON.parse(localStorage.getItem('subscrap_chats') || '[]'); }
+            catch (e) { return []; }
+        }
+
+        function setChats(list) {
+            try { localStorage.setItem('subscrap_chats', JSON.stringify(list)); } catch (e) {}
+        }
+
+        // Saves the current chat automatically after every answer
+        function saveCurrentChat() {
+            if (!chatHistory.length) return;
+            const list = getChats();
+            let chat = list.find(c => c.id === currentChatId);
+            if (!chat) {
+                currentChatId = 'c' + Date.now();
+                const first = chatHistory[0].parts[0].text.trim();
+                chat = { id: currentChatId, title: first.length > 40 ? first.slice(0, 40) + '...' : first, messages: [], updated: 0 };
+                list.push(chat);
+            }
+            chat.messages = chatHistory.slice();
+            chat.updated = Date.now();
+            list.sort((a, b) => b.updated - a.updated);
+            setChats(list.slice(0, 30));
+        }
+
+        function newChat() {
             if (busy) return;
             chatHistory = [];
-            const chat = document.getElementById('chat');
-            chat.innerHTML = `<div id="welcome" class="text-center text-gray-400 text-sm pt-16">Hello Madam 🍲<br>What can I help you find today?</div>`;
+            currentChatId = null;
+            document.getElementById('chat').innerHTML = WELCOME_HTML;
             window.scrollTo({ top: 0 });
+        }
+
+        function openChat(id) {
+            if (busy) return;
+            const chat = getChats().find(c => c.id === id);
+            if (!chat) return;
+            chatHistory = chat.messages.slice();
+            currentChatId = id;
+            document.getElementById('chat').innerHTML = '';
+            chat.messages.forEach(m => {
+                const text = m.parts[0].text;
+                if (m.role === 'user') {
+                    addUserMessage(text);
+                } else {
+                    const ui = addBotMessage();
+                    renderStatic(ui.text, text);
+                    addSaveButton(ui, text);
+                }
+            });
+            scrollToBottom();
+            toggleMenu();
+        }
+
+        function deleteChat(id, event) {
+            event.stopPropagation();
+            setChats(getChats().filter(c => c.id !== id));
+            if (id === currentChatId) currentChatId = null;
+            renderChatList();
+        }
+
+        function renderChatList() {
+            const box = document.getElementById('chat-list');
+            const list = getChats();
+            box.innerHTML = '';
+            if (!list.length) {
+                const empty = document.createElement('div');
+                empty.className = 'text-sm text-gray-500 px-1';
+                empty.textContent = 'No chats yet. Your chats are saved here automatically.';
+                box.appendChild(empty);
+                return;
+            }
+            list.forEach(c => {
+                const row = document.createElement('div');
+                row.className = 'menu-item cursor-pointer' + (c.id === currentChatId ? ' border-brandOrange/50' : '');
+                row.onclick = () => openChat(c.id);
+
+                const info = document.createElement('div');
+                info.className = 'flex-grow min-w-0';
+                const title = document.createElement('div');
+                title.className = 'truncate';
+                title.textContent = c.title;
+                const date = document.createElement('div');
+                date.className = 'text-xs text-gray-500';
+                date.textContent = new Date(c.updated).toLocaleDateString([], { day: 'numeric', month: 'short' });
+                info.appendChild(title);
+                info.appendChild(date);
+
+                const del = document.createElement('button');
+                del.className = 'flex-shrink-0 text-gray-500 hover:text-red-400 px-1';
+                del.textContent = '✕';
+                del.title = 'Delete chat';
+                del.onclick = e => deleteChat(c.id, e);
+
+                row.appendChild(info);
+                row.appendChild(del);
+                box.appendChild(row);
+            });
         }
 
         /* ---------- Saved answers (kept in this browser) ---------- */
@@ -580,6 +712,7 @@ If she is upset or says something bad, reply once with: "Please be cool, Boss go
             if (status === 'done') {
                 chatHistory.push({ role: 'user', parts: [{ text: userText }] });
                 chatHistory.push({ role: 'model', parts: [{ text: finalText }] });
+                saveCurrentChat();
                 typer.finish(() => addSaveButton(ui, finalText));
                 return true;
             }
