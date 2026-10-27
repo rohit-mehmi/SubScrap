@@ -36,7 +36,7 @@
         <div class="flex flex-col items-center">
             <img src="logo.png" alt="SubScrap Logo" class="w-40 md:w-56 object-contain drop-shadow-[0_10px_20px_rgba(255,87,34,0.3)]" onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/000000/FFFFFF?text=SubScrap';">
         </div>
-        <!-- Settings Gear to input API Key securely -->
+        <!-- Settings Gear to input API Key -->
         <button onclick="toggleSettings()" class="glass-dock p-2.5 rounded-full hover:bg-white/10 text-gray-300 transition-all active:scale-95" title="API Key Settings">
             ⚙️
         </button>
@@ -46,13 +46,14 @@
     <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
         <div class="glass-dock max-w-md w-full p-6 rounded-2xl border border-white/20 shadow-2xl flex flex-col space-y-4">
             <div class="flex justify-between items-center">
-                <h3 class="text-brandOrange font-bold text-lg flex items-center gap-2"><span>🔑</span> Google OAuth Token Setup</h3>
+                <h3 class="text-brandOrange font-bold text-lg flex items-center gap-2"><span>🔑</span> Gemini API Key Setup</h3>
                 <button onclick="toggleSettings()" class="text-gray-400 hover:text-white">✕</button>
             </div>
             <p class="text-xs text-gray-300 leading-relaxed">
-                Your token (starting with AQ...) is securely saved in your browser's local storage and used as a Bearer token.
+                Paste your Gemini API key (starting with AQ. or AIza). It is saved only in this browser's local storage.
             </p>
-            <input id="api-key-input" type="password" placeholder="AQ..." class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
+            <input id="api-key-input" type="password" placeholder="AQ.... or AIza..." class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
+            <input id="model-input" type="text" placeholder="Model name (default: gemini-3.8-flash)" class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brandOrange">
             <button onclick="saveApiKey()" class="bg-gradient-to-r from-orange-500 to-brandOrange hover:from-orange-600 hover:to-brandOrange text-white font-medium py-3 rounded-xl transition-all shadow-lg active:scale-95 text-sm">
                 Save & Connect
             </button>
@@ -66,28 +67,28 @@
             <button onclick="closeModal()" class="text-gray-400 hover:text-white text-sm">✕ Close</button>
         </div>
         <div id="ai-output" class="text-sm text-gray-200 space-y-3 leading-relaxed">
-            <!-- AI Response streams here -->
+            <!-- AI Response appears here -->
         </div>
     </main>
 
     <!-- Fallback empty spacer when modal is closed -->
     <div id="empty-spacer" class="flex-grow"></div>
 
-    <!-- CENTER-BOTTOM: Fluffy Glassmorphic Search Dock with Side Buttons -->
+    <!-- CENTER-BOTTOM: Glassmorphic Search Dock with Side Buttons -->
     <footer class="w-full max-w-3xl mb-8 z-10">
         <div class="flex items-center justify-center gap-3 w-full">
-            
+
             <!-- Left Button: Saved -->
             <button onclick="openSaved()" class="glass-dock hover:bg-white/10 text-gray-200 text-xs md:text-sm font-medium px-4 py-3 rounded-full transition-all duration-300 flex items-center gap-1.5 shadow-lg whitespace-nowrap active:scale-95">
                 <span>⭐</span> Saved
             </button>
 
-            <!-- Center: Fluffy Round Search Bar -->
+            <!-- Center: Round Search Bar -->
             <div class="glass-dock flex-grow rounded-full px-5 py-3 flex items-center shadow-2xl transition-all duration-300 focus-within:border-brandOrange focus-within:ring-2 focus-within:ring-brandOrange/50">
-                <input 
-                    id="search-input" 
-                    type="text" 
-                    placeholder="Search anything on Reddit or talk to me..." 
+                <input
+                    id="search-input"
+                    type="text"
+                    placeholder="Search anything on Reddit or talk to me..."
                     class="w-full bg-transparent text-white placeholder-gray-400 text-sm md:text-base focus:outline-none"
                     onkeypress="handleKeyPress(event)"
                 >
@@ -108,37 +109,69 @@
 
     <!-- Script Handling -->
     <script>
-        const SYSTEM_PERSONA = `You are SubScrap AI, a helpful assistant built by the Boss (Rohit Mehmi) for his sister. 
-        You must ALWAYS talk to her with full respect (Respected Madam). 
-        Use special emojis like 🍲 (pressure cooker), 👑, ✨. 
-        If she expresses frustration or says anything bad, always reply playfully with: "Please be cool, Boss gonna kill me if they find this out!" to protect the Boss's reputation.
-        You can handle normal conversation, casual chatting, and also translate natural language queries into simulated Reddit search findings, filters, dates, and locations. Keep answers clear, direct, and helpful.`;
+        const SYSTEM_PERSONA = `You are SubScrap AI, a helpful assistant built by the Boss (Rohit Mehmi) for his sister.
+You must ALWAYS talk to her with full respect (Respected Madam).
+Use special emojis like 🍲 (pressure cooker), 👑, ✨.
+If she expresses frustration or says anything bad, always reply playfully with: "Please be cool, Boss gonna kill me if they find this out!" to protect the Boss's reputation.
+You can handle normal conversation, casual chatting, and also translate natural language queries into simulated Reddit search findings, filters, dates, and locations. Keep answers clear, direct, and helpful.`;
+
+        const DEFAULT_MODEL = 'gemini-3.8-flash';
+        const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
         function getApiKey() {
             return localStorage.getItem('subscrap_gemini_key') || '';
         }
 
+        function getModel() {
+            return localStorage.getItem('subscrap_gemini_model') || DEFAULT_MODEL;
+        }
+
         function toggleSettings() {
             const modal = document.getElementById('settings-modal');
             modal.classList.toggle('hidden');
-            if(!modal.classList.contains('hidden')) {
+            if (!modal.classList.contains('hidden')) {
                 document.getElementById('api-key-input').value = getApiKey();
+                document.getElementById('model-input').value = localStorage.getItem('subscrap_gemini_model') || '';
             }
         }
 
         function saveApiKey() {
             const key = document.getElementById('api-key-input').value.trim();
-            if(!key) {
-                alert('Please enter a valid token.');
+            const model = document.getElementById('model-input').value.trim();
+            if (!key) {
+                alert('Please enter a valid API key.');
                 return;
             }
             localStorage.setItem('subscrap_gemini_key', key);
+            if (model) {
+                localStorage.setItem('subscrap_gemini_model', model);
+            } else {
+                localStorage.removeItem('subscrap_gemini_model');
+            }
             toggleSettings();
-            alert('Token saved successfully! 🍲✨');
+            alert('Key saved successfully! 🍲✨');
+        }
+
+        // Escape HTML so model output can't inject markup, then apply simple formatting
+        function formatReply(text) {
+            const escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return escaped
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
         }
 
         async function callGemini(promptText) {
-            const token = getApiKey();
+            const apiKey = getApiKey();
             const container = document.getElementById('response-container');
             const spacer = document.getElementById('empty-spacer');
             const output = document.getElementById('ai-output');
@@ -146,10 +179,10 @@
             spacer.classList.add('hidden');
             container.classList.remove('hidden');
 
-            if (!token) {
+            if (!apiKey) {
                 output.innerHTML = `
-                    <p class="text-yellow-400 mb-3">⚠️ Token is missing!</p>
-                    <p class="text-sm text-gray-300 mb-4">Click the gear icon (⚙️) at the top right to paste your AQ... token.</p>
+                    <p class="text-yellow-400 mb-3">⚠️ API key is missing!</p>
+                    <p class="text-sm text-gray-300 mb-4">Click the gear icon (⚙️) at the top right to paste your Gemini API key.</p>
                     <button onclick="toggleSettings()" class="bg-brandOrange text-white px-4 py-2 rounded-xl text-xs font-semibold">Open Settings</button>
                 `;
                 return;
@@ -158,18 +191,20 @@
             output.innerHTML = '<span class="text-gray-400 animate-pulse">Consulting the pressure cooker 🍲...</span>';
 
             try {
-                // Using the standard Generative Language API endpoint with Bearer authentication for OAuth tokens
-                const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
-                
+                const model = getModel();
+                const fetchUrl = `${API_BASE}/${encodeURIComponent(model)}:generateContent`;
+
                 const response = await fetch(fetchUrl, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        // API keys (AQ... and AIza...) go in this header, NOT as a Bearer token
+                        'x-goog-api-key': apiKey
                     },
                     body: JSON.stringify({
+                        systemInstruction: { parts: [{ text: SYSTEM_PERSONA }] },
                         contents: [
-                            { role: "user", parts: [{ text: SYSTEM_PERSONA + "\n\nUser request: " + promptText }] }
+                            { role: 'user', parts: [{ text: promptText }] }
                         ]
                     })
                 });
@@ -177,25 +212,26 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    output.innerHTML = `<p class="text-red-400"><strong>API Error:</strong> ${data.error.message}<br><br><span class="text-xs text-gray-400">Madam, please be cool, Boss gonna kill me if they find this out! 🍲</span></p>`;
+                    output.innerHTML = `<p class="text-red-400"><strong>API Error:</strong> ${escapeHtml(data.error.message)}<br><br><span class="text-xs text-gray-400">Madam, please be cool, Boss gonna kill me if they find this out! 🍲</span></p>`;
                     return;
                 }
 
-                if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0].text) {
-                    let reply = data.candidates[0].content.parts[0].text;
-                    output.innerHTML = `<p>${reply.replace(/\n/g, '<br>')}</p>`;
+                const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+                if (parts && parts.length) {
+                    const reply = parts.map(p => p.text || '').join('');
+                    output.innerHTML = `<p>${formatReply(reply)}</p>`;
                 } else {
-                    output.innerHTML = `<p class="text-red-400">Oops! Received an unexpected response format.</p>`;
+                    output.innerHTML = `<p class="text-red-400">Oops! Received an unexpected response format (it may have been blocked by a safety filter). Try rephrasing.</p>`;
                 }
             } catch (error) {
-                output.innerHTML = `<p class="text-red-400">Connection error: ${error.message}. Please check your internet connection.</p>`;
+                output.innerHTML = `<p class="text-red-400">Connection error: ${escapeHtml(error.message)}. Please check your internet connection.</p>`;
             }
         }
 
         function executeSearch() {
             const query = document.getElementById('search-input').value.trim();
-            if(!query) return;
-            callGemini("Explore Reddit / Answer this query: " + query);
+            if (!query) return;
+            callGemini('Explore Reddit / Answer this query: ' + query);
         }
 
         function handleKeyPress(e) {
@@ -205,7 +241,7 @@
         }
 
         function openSaved() {
-            callGemini("Show me my saved Reddit items and searches.");
+            callGemini('Show me my saved Reddit items and searches.');
         }
 
         function openBossHelp() {
